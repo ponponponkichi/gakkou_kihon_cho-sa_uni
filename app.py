@@ -56,7 +56,7 @@ current_mode = "all" if "①" in mode_str else "select"
 selected_forms = []
 if current_mode == "select":
     st.write("対象とする様式にチェックを入れてください：")
-    cols = st.columns(4) # 4列で綺麗に並べる
+    cols = st.columns(4)
     for i, form in enumerate(known_forms):
         with cols[i % 4]:
             if st.checkbox(form, key=form):
@@ -71,7 +71,7 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
         st.error("エラー: 「指定様式のみ整理」が選ばれましたが、様式が1つもチェックされていません。")
         st.stop()
 
-    # --- UI更新用のプレースホルダー（枠）を用意 ---
+    # --- UI更新用のプレースホルダー ---
     progress_bar = st.progress(0)
     status_text = st.empty()
     log_area = st.empty()
@@ -79,14 +79,12 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
 
     def log(msg):
         log_messages.append(msg)
-        # 最新のログが下に追加されるように表示
         log_area.text_area("実行ログ", value="\n".join(log_messages), height=300, disabled=True)
 
     log("="*50)
     log("全自動処理を開始します...")
     log(f"処理モード: {'すべての様式' if current_mode == 'all' else f'指定された様式 ({len(selected_forms)}個)'}")
 
-    # サーバー上の一時フォルダ（処理が終わったら自動で消える）を作成
     with tempfile.TemporaryDirectory() as temp_dir:
         base_save_dir = os.path.join(temp_dir, "processed_data")
         os.makedirs(base_save_dir)
@@ -122,7 +120,6 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
             log(f"{total_links}年度分のデータを取得します。")
 
             for i, link in enumerate(unique_links):
-                # 進捗更新
                 progress_val = (i / total_links) * 0.5
                 progress_bar.progress(progress_val)
                 status_text.text(f"フェーズ1進行中... ({int(progress_val * 100)}%)")
@@ -149,7 +146,7 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                         zip_res = requests.get(zip_url)
                         with zipfile.ZipFile(io.BytesIO(zip_res.content)) as z:
                             z.extractall(year_folder_path)
-                        time.sleep(1) # サーバー負荷軽減
+                        time.sleep(1)
                     else:
                         log(f"  × スキップ: {safe_year_text}内にデータが見つかりません")
                 except Exception as e:
@@ -243,8 +240,9 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                                 record_count = len(df)
                                 merged_data.append(df)
                                 
+                                # ★修正ポイント1: 【】をやめて _() に変更
                                 name_part, ext_part = os.path.splitext(file)
-                                new_filename = f"{name_part}【{record_count}records】{ext_part}"
+                                new_filename = f"{name_part}_({record_count}_records){ext_part}"
                                 os.rename(file_path, os.path.join(form_path, new_filename))
                                 log(f"    - 読込成功: {new_filename}")
                             except Exception as e:
@@ -253,13 +251,13 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                     if merged_data:
                         final_df = pd.concat(merged_data, ignore_index=True)
                         final_record_count = len(final_df)
-                        merged_filename = f"{form_folder}_merged_【{final_record_count}records】.csv"
+                        # ★修正ポイント2: 【】をやめて _() に変更
+                        merged_filename = f"{form_folder}_merged_({final_record_count}_records).csv"
                         save_path = os.path.join(form_path, merged_filename)
                         final_df.to_csv(save_path, index=False, encoding='utf-8-sig')
                         log(f"  ★ 結合完了: {merged_filename} を生成しました")
 
-            # ログもテキストファイルとして保存ディレクトリに含める
-            with open(os.path.join(base_save_dir, "実行ログ.txt"), "w", encoding="utf-8") as f:
+            with open(os.path.join(base_save_dir, "run_log.txt"), "w", encoding="utf-8") as f:
                 f.write("\n".join(log_messages))
 
             # ==========================================
@@ -270,19 +268,16 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
             log("\n==================================================")
             log("すべての処理が完了しました！ZIPファイルを作成しています...")
 
-            # メモリ上でZIPファイルを作成
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                 for root, dirs, files in os.walk(base_save_dir):
                     for file in files:
                         file_path = os.path.join(root, file)
-                        # ZIP内のフォルダ構造を綺麗に保つための処理
                         arcname = os.path.relpath(file_path, base_save_dir)
                         zip_file.write(file_path, arcname)
             
             st.success("✅ 全ての処理が完了しました！下のボタンから結果をダウンロードしてください。")
             
-            # ダウンロードボタンの表示
             st.download_button(
                 label="📁 整理済みのデータをダウンロード (ZIP)",
                 data=zip_buffer.getvalue(),
