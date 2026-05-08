@@ -42,12 +42,12 @@ def get_hidden_header_index(filepath):
 
 # --- UIの構築 ---
 st.title("📊 学校基本調査 一括ダウンロード＆整理ツール")
-st.write("独立行政法人大学改革支援・学位授与機構のポータルサイトから、指定した様式のデータを一括取得・結合します。")
+st.write("大学改革支援・学位授与機構の「大学基本情報」から、「学校基本調査」指定様式のデータを一括取得し・複数年データを1本化します。")
 
 # ラジオボタン
 mode_str = st.radio(
     "処理モードを選択してください",
-    ("① 全様式を整理する", "② 指定様式のみ整理する"),
+    ("① 全様式を1本化する", "② 指定様式のみ1本化する"),
     horizontal=True
 )
 current_mode = "all" if "①" in mode_str else "select"
@@ -68,7 +68,7 @@ st.divider()
 if st.button("🚀 全自動処理を開始する", type="primary"):
     
     if current_mode == "select" and not selected_forms:
-        st.error("エラー: 「指定様式のみ整理」が選ばれましたが、様式が1つもチェックされていません。")
+        st.error("エラー: 「指定様式のみ1本化する」が選ばれましたが、様式が1つもチェックされていません。")
         st.stop()
 
     # --- UI更新用のプレースホルダー ---
@@ -82,7 +82,7 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
         log_area.text_area("実行ログ", value="\n".join(log_messages), height=300, disabled=True)
 
     log("="*50)
-    log("全自動処理を開始します...")
+    log("ダウンロードを開始します...")
     log(f"処理モード: {'すべての様式' if current_mode == 'all' else f'指定された様式 ({len(selected_forms)}個)'}")
 
     with tempfile.TemporaryDirectory() as temp_dir:
