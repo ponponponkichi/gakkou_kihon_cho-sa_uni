@@ -18,7 +18,7 @@ st.set_page_config(page_title="学校基本調査 一括DL＆整理ツール", l
 # 列名の表記ゆれを統一するための辞書
 rename_dict = {}
 
-# 過去のログから判明している様式のマスターリスト（辞書型に変更し、画面表示用と裏側の処理用を分ける）
+# 過去のログから判明している様式のマスターリスト
 known_forms = {
     "07go_1": "07go_1_教員数（本務者）（再掲）", 
     "07go_A": "07go_A_学生数", 
@@ -29,7 +29,6 @@ known_forms = {
     "08go_3": "08go_3_学部_学科別学生数のうち最低在学年限超過学生数（編入学者は除く。）", 
     "08go_7": "08go_7_学部_専攻科，別科及び科目等履修生等の学生数", 
     "08go_D": "08go_D_学部_学科別学生数|入学志願者数|入学者数", 
-    # "08go_E" は対象から除外
     "08go_G": "08go_G_学部_出身高校の所在地県別入学者数", 
     "08go_O": "08go_O_学部_年齢別入学者数（再掲）", 
     "08go_R": "08go_R_学部_短期大学・高等専門学校・専修学校（専門課程）・高等学校等専攻科からの編入学者数",
@@ -54,14 +53,29 @@ known_forms = {
 }
 
 def get_hidden_header_index(filepath):
-    try:
-        wb = openpyxl.load_workbook(filepath, data_only=True)
-        sheet = wb.active
-        for row_idx in range(1, sheet.max_row + 1):
-            if sheet.row_dimensions[row_idx].hidden:
-                return row_idx - 1
-    except Exception:
-        pass
+    """
+    ファイル形式に合わせて非表示行を特定する関数
+    """
+    if filepath.endswith('.xlsx'):
+        try:
+            wb = openpyxl.load_workbook(filepath, data_only=True)
+            sheet = wb.active
+            for row_idx in range(1, sheet.max_row + 1):
+                if sheet.row_dimensions[row_idx].hidden:
+                    return row_idx - 1 # Pandas用に0始まりのインデックスで返す
+        except Exception:
+            pass
+    elif filepath.endswith('.xls'):
+        try:
+            import xlrd
+            # 古いxlsファイルでもフォーマット情報を読み取って非表示行を探す
+            book = xlrd.open_workbook(filepath, formatting_info=True)
+            sheet = book.sheet_by_index(0)
+            for row_idx in range(sheet.nrows):
+                if row_idx in sheet.rowinfo_map and sheet.rowinfo_map[row_idx].hidden:
+                    return row_idx
+        except Exception:
+            pass
     return None
 
 # --- UIの構築 ---
@@ -81,11 +95,9 @@ selected_forms = []
 if current_mode == "select":
     st.write("対象とする様式にチェックを入れてください：")
     cols = st.columns(4)
-    # 辞書からコード（07go_A）とラベル（07go_A_学生数）を取り出してUIを生成
     for i, (form_code, form_label) in enumerate(known_forms.items()):
         with cols[i % 4]:
             if st.checkbox(form_label, key=form_code):
-                # 処理用に保存するのはコード部分（07go_A）のみ
                 selected_forms.append(form_code)
 
 st.divider()
@@ -97,7 +109,6 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
         st.error("エラー: 「指定様式のみ1本化する」が選ばれましたが、様式が1つもチェックされていません。")
         st.stop()
 
-    # --- UI更新用のプレースホルダー ---
     progress_bar = st.progress(0)
     status_text = st.empty()
     log_area = st.empty()
@@ -235,25 +246,22 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                     form_path = os.path.join(base_save_dir, form_folder)
                     log(f"\n■ 処理中: 様式 [{form_folder}]")
                     
-                    target_header_idx = None
-                    for file in os.listdir(form_path):
-                        if file.endswith('.xlsx'):
-                            idx = get_hidden_header_index(os.path.join(form_path, file))
-                            if idx is not None:
-                                target_header_idx = idx
-                                log(f"  -> 非表示ヘッダー行を特定: {idx + 1}行目")
-                                break
-                    
-                    if target_header_idx is None:
-                        log(f"  ! 非表示行が見つからないため、この様式の結合をスキップします。")
-                        continue
-
                     merged_data = []
+                    default_header_idx = 2 # 万が一見つからなかった場合の保険として3行目(index 2)を仮設定
+                    
                     for file in os.listdir(form_path):
                         if file.endswith(('.xls', '.xlsx')):
                             file_path = os.path.join(form_path, file)
                             try:
-                                df = pd.read_excel(file_path, header=target_header_idx)
+                                # ★ここで「すべてのファイル1つ1つに対して」非表示行を特定する
+                                current_header_idx = get_hidden_header_index(file_path)
+                                
+                                if current_header_idx is not None:
+                                    default_header_idx = current_header_idx
+                                else:
+                                    current_header_idx = default_header_idx
+
+                                df = pd.read_excel(file_path, header=current_header_idx)
                                 df.dropna(how='all', axis=0, inplace=True)
                                 df.dropna(how='all', axis=1, inplace=True)
 
@@ -269,7 +277,7 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                                 name_part, ext_part = os.path.splitext(file)
                                 new_filename = f"{name_part}_({record_count}_records){ext_part}"
                                 os.rename(file_path, os.path.join(form_path, new_filename))
-                                log(f"    - 読込成功: {new_filename}")
+                                log(f"    - 読込成功: {new_filename} (非表示ヘッダー: {current_header_idx + 1}行目)")
                             except Exception as e:
                                 log(f"    × 読込エラー: {file} - {e}")
                                 
