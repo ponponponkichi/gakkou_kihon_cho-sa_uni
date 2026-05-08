@@ -18,16 +18,40 @@ st.set_page_config(page_title="学校基本調査 一括DL＆整理ツール", l
 # 列名の表記ゆれを統一するための辞書
 rename_dict = {}
 
-# 過去のログから判明している様式のマスターリスト
-known_forms = [
-    "07go_1_教員数（本務者）（再掲）", "07go_A_学生数", "07go_B_教員数（本務者）", "07go_C_職員数", "07go_Z_教員数（兼務者）",
-    "08go_2_学部_学科別学生数のうち休学者数", "08go_3_学部_学科別学生数のうち最低在学年限超過学生数（編入学者は除く。）", "08go_7_学部_専攻科，別科及び科目等履修生等の学生数", "08go_D_学部_学科別学生数|入学志願者数|入学者数", "08go_E", "08go_G_学部_出身高校の所在地県別入学者数", "08go_O_学部_年齢別入学者数（再掲）", "08go_R_学部_短期大学・高等専門学校・専修学校（専門課程）・高等学校等専攻科からの編入学者数",
-    "09go_4_大学院_専攻別学生数のうち休学者数", "09go_5_大学院_専攻別学生数のうち最低在学年限超過学生数（編入学者は除く。）", "09go_8_大学院_科目等履修生等の学生数", "09go_H_大学院_専攻別学生数|左記のうち社会人", "09go_I_大学院_入学状況|入学志願者数|入学者数", "09go_S_大学院_年齢別入学者数",
-    "10go_6_本科学生内訳_学科別学生数のうち休学者数", "10go_9_本科学生内訳_専攻科，別科及び科目等履修生等の学生数", "10go_J_本科学生内訳_学科別学生数|入学状況（本科）", "10go_K_本科学生内訳_出身高校の所在地県別入学者数", "10go_Q_本科学生内訳_齢別入学者数（再掲）", "10go_T_本科学生内訳_高等学校等専攻科からの編入学者数",
-    "11go_bekkei_国費留学生，私費留学生，留学生以外の外国人学生（専攻科・別科の学生，科目等履修生・聴講生・研究生）", "11go_gkssu_国費留学生，私費留学生，留学生以外の外国人学生",
-    "20go_学校施設",
-    "30go_2_1_卒業後_状況別卒業者数，入学年度別卒業者数", "30go_2_1_bekkei_卒業後_年齢別卒業者数", "30go_2_2_卒業後_職業別就職者数，産業別就職者数"
-]
+# 過去のログから判明している様式のマスターリスト（辞書型に変更し、画面表示用と裏側の処理用を分ける）
+known_forms = {
+    "07go_1": "07go_1_教員数（本務者）（再掲）", 
+    "07go_A": "07go_A_学生数", 
+    "07go_B": "07go_B_教員数（本務者）", 
+    "07go_C": "07go_C_職員数", 
+    "07go_Z": "07go_Z_教員数（兼務者）",
+    "08go_2": "08go_2_学部_学科別学生数のうち休学者数", 
+    "08go_3": "08go_3_学部_学科別学生数のうち最低在学年限超過学生数（編入学者は除く。）", 
+    "08go_7": "08go_7_学部_専攻科，別科及び科目等履修生等の学生数", 
+    "08go_D": "08go_D_学部_学科別学生数|入学志願者数|入学者数", 
+    # "08go_E" は対象から除外
+    "08go_G": "08go_G_学部_出身高校の所在地県別入学者数", 
+    "08go_O": "08go_O_学部_年齢別入学者数（再掲）", 
+    "08go_R": "08go_R_学部_短期大学・高等専門学校・専修学校（専門課程）・高等学校等専攻科からの編入学者数",
+    "09go_4": "09go_4_大学院_専攻別学生数のうち休学者数", 
+    "09go_5": "09go_5_大学院_専攻別学生数のうち最低在学年限超過学生数（編入学者は除く。）", 
+    "09go_8": "09go_8_大学院_科目等履修生等の学生数", 
+    "09go_H": "09go_H_大学院_専攻別学生数|左記のうち社会人", 
+    "09go_I": "09go_I_大学院_入学状況|入学志願者数|入学者数", 
+    "09go_S": "09go_S_大学院_年齢別入学者数",
+    "10go_6": "10go_6_本科学生内訳_学科別学生数のうち休学者数", 
+    "10go_9": "10go_9_本科学生内訳_専攻科，別科及び科目等履修生等の学生数", 
+    "10go_J": "10go_J_本科学生内訳_学科別学生数|入学状況（本科）", 
+    "10go_K": "10go_K_本科学生内訳_出身高校の所在地県別入学者数", 
+    "10go_Q": "10go_Q_本科学生内訳_齢別入学者数（再掲）", 
+    "10go_T": "10go_T_本科学生内訳_高等学校等専攻科からの編入学者数",
+    "11go_bekkei": "11go_bekkei_国費留学生，私費留学生，留学生以外の外国人学生（専攻科・別科の学生，科目等履修生・聴講生・研究生）", 
+    "11go_gkssu": "11go_gkssu_国費留学生，私費留学生，留学生以外の外国人学生",
+    "20go": "20go_学校施設",
+    "30go_2_1": "30go_2_1_卒業後_状況別卒業者数，入学年度別卒業者数", 
+    "30go_2_1_bekkei": "30go_2_1_bekkei_卒業後_年齢別卒業者数", 
+    "30go_2_2": "30go_2_2_卒業後_職業別就職者数，産業別就職者数"
+}
 
 def get_hidden_header_index(filepath):
     try:
@@ -57,10 +81,12 @@ selected_forms = []
 if current_mode == "select":
     st.write("対象とする様式にチェックを入れてください：")
     cols = st.columns(4)
-    for i, form in enumerate(known_forms):
+    # 辞書からコード（07go_A）とラベル（07go_A_学生数）を取り出してUIを生成
+    for i, (form_code, form_label) in enumerate(known_forms.items()):
         with cols[i % 4]:
-            if st.checkbox(form, key=form):
-                selected_forms.append(form)
+            if st.checkbox(form_label, key=form_code):
+                # 処理用に保存するのはコード部分（07go_A）のみ
+                selected_forms.append(form_code)
 
 st.divider()
 
@@ -240,7 +266,6 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                                 record_count = len(df)
                                 merged_data.append(df)
                                 
-                                # ★修正ポイント1: 【】をやめて _() に変更
                                 name_part, ext_part = os.path.splitext(file)
                                 new_filename = f"{name_part}_({record_count}_records){ext_part}"
                                 os.rename(file_path, os.path.join(form_path, new_filename))
@@ -251,7 +276,6 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                     if merged_data:
                         final_df = pd.concat(merged_data, ignore_index=True)
                         final_record_count = len(final_df)
-                        # ★修正ポイント2: 【】をやめて _() に変更
                         merged_filename = f"{form_folder}_merged_({final_record_count}_records).csv"
                         save_path = os.path.join(form_path, merged_filename)
                         final_df.to_csv(save_path, index=False, encoding='utf-8-sig')
