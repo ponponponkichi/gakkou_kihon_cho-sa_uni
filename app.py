@@ -9,8 +9,10 @@ import datetime
 import shutil
 import pandas as pd
 import openpyxl
+from openpyxl.styles import PatternFill
 import streamlit as st
 import tempfile
+import re
 
 # --- Streamlitの基本設定 ---
 st.set_page_config(page_title="学校基本調査 一括DL＆整理ツール", layout="wide")
@@ -53,22 +55,19 @@ known_forms = {
 }
 
 def get_hidden_header_index(filepath):
-    """
-    ファイル形式に合わせて非表示行を特定する関数
-    """
+    """ファイル形式に合わせて非表示行を特定する関数"""
     if filepath.endswith('.xlsx'):
         try:
             wb = openpyxl.load_workbook(filepath, data_only=True)
             sheet = wb.active
             for row_idx in range(1, sheet.max_row + 1):
                 if sheet.row_dimensions[row_idx].hidden:
-                    return row_idx - 1 # Pandas用に0始まりのインデックスで返す
+                    return row_idx - 1
         except Exception:
             pass
     elif filepath.endswith('.xls'):
         try:
             import xlrd
-            # 古いxlsファイルでもフォーマット情報を読み取って非表示行を探す
             book = xlrd.open_workbook(filepath, formatting_info=True)
             sheet = book.sheet_by_index(0)
             for row_idx in range(sheet.nrows):
@@ -82,9 +81,19 @@ def get_hidden_header_index(filepath):
 st.title("📊 学校基本調査 一括ダウンロード＆整理ツール")
 st.write("大学改革支援・学位授与機構の「大学基本情報」から、「学校基本調査」指定様式のデータを一括取得し・複数年データを1本化します。")
 
+# --- 追加機能：年度指定 ---
+st.write("#### 📅 対象年度の指定")
+years_list = ["すべて"] + [str(y) for y in range(2035, 2011, -1)]
+col1, col2 = st.columns(2)
+with col1:
+    start_year_str = st.selectbox("開始年度", years_list, index=0)
+with col2:
+    end_year_str = st.selectbox("終了年度", years_list, index=0)
+
+st.write("#### 📂 処理モードの選択")
 # ラジオボタン
 mode_str = st.radio(
-    "処理モードを選択してください",
+    "整理する範囲を選んでください",
     ("① 全様式を1本化する（5分ほどかかる）", "② 指定様式のみ1本化する（おすすめ）"),
     horizontal=True
 )
@@ -120,6 +129,7 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
 
     log("="*50)
     log("ダウンロードを開始します...")
+    log(f"対象年度: {start_year_str} ～ {end_year_str}")
     log(f"処理モード: {'すべての様式' if current_mode == 'all' else f'指定された様式 ({len(selected_forms)}個)'}")
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -149,9 +159,30 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                     seen_urls.add(full_url)
                     unique_links.append(link)
 
+            # --- 年度によるダウンロード対象の絞り込み ---
+            filtered_links = []
+            start_y = int(start_year_str) if start_year_str != "すべて" else 0
+            end_y = int(end_year_str) if end_year_str != "すべて" else 9999
+            
+            if start_y > end_y:
+                start_y, end_y = end_y, start_y
+
+            for link in unique_links:
+                year_text = link.get_text(strip=True).replace('\n', '').replace(' ', '')
+                m = re.search(r'^(\d{4})', year_text)
+                if m:
+                    link_year = int(m.group(1))
+                    if start_y <= link_year <= end_y:
+                        filtered_links.append(link)
+                else:
+                    filtered_links.append(link)
+            
+            unique_links = filtered_links
+            # ----------------------------------------------
+
             total_links = len(unique_links)
             if total_links == 0:
-                log("ダウンロード可能な年度データが見つかりませんでした。")
+                log("指定された条件に合致するダウンロード可能な年度データが見つかりませんでした。")
                 st.stop()
 
             log(f"{total_links}年度分のデータを取得します。")
@@ -223,7 +254,7 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
             shutil.rmtree(temp_raw_dir, ignore_errors=True)
 
             # ==========================================
-            # フェーズ3: データ結合とCSV一本化
+            # フェーズ3: データ結合と一本化 (Excel出力対応)
             # ==========================================
             progress_bar.progress(0.6)
             status_text.text("フェーズ3進行中... (60%)")
@@ -247,13 +278,12 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                     log(f"\n■ 処理中: 様式 [{form_folder}]")
                     
                     merged_data = []
-                    default_header_idx = 2 # 万が一見つからなかった場合の保険として3行目(index 2)を仮設定
+                    default_header_idx = 2 
                     
                     for file in os.listdir(form_path):
                         if file.endswith(('.xls', '.xlsx')):
                             file_path = os.path.join(form_path, file)
                             try:
-                                # ★ここで「すべてのファイル1つ1つに対して」非表示行を特定する
                                 current_header_idx = get_hidden_header_index(file_path)
                                 
                                 if current_header_idx is not None:
@@ -283,10 +313,86 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                                 
                     if merged_data:
                         final_df = pd.concat(merged_data, ignore_index=True)
+
+                        # --- 学校名と大学名の統合 ---
+                        has_gakko = '学校名' in final_df.columns
+                        has_daigaku = '大学名' in final_df.columns
+                        
+                        if has_gakko and has_daigaku:
+                            combined_col = final_df['学校名'].fillna(final_df['大学名'])
+                            idx_gakko = list(final_df.columns).index('学校名')
+                            idx_daigaku = list(final_df.columns).index('大学名')
+                            insert_idx = min(idx_gakko, idx_daigaku)
+                            
+                            final_df = final_df.drop(columns=['学校名', '大学名'])
+                            final_df.insert(insert_idx, '学校名・大学名', combined_col)
+                            log(f"    - 「学校名」と「大学名」列を「学校名・大学名」に統合しました。")
+                            
+                        elif has_gakko:
+                            final_df = final_df.rename(columns={'学校名': '学校名・大学名'})
+                            log(f"    - 「学校名」列を「学校名・大学名」に変更しました。")
+                        elif has_daigaku:
+                            final_df = final_df.rename(columns={'大学名': '学校名・大学名'})
+                            log(f"    - 「大学名」列を「学校名・大学名」に変更しました。")
+
+                        # --- 途中追加・途中終了列の検知とアラート（ピンク色） ---
+                        pink_columns = []
+                        if not final_df.empty and 'ファイル年度' in final_df.columns:
+                            file_years = final_df['ファイル年度'].dropna().astype(str)
+                            min_year = file_years.min()
+                            max_year = file_years.max()
+                            tmp_rename_mapping = {}
+                            
+                            for col in final_df.columns:
+                                if col == 'ファイル年度':
+                                    continue
+                                
+                                valid_mask = final_df[col].notna() & (final_df[col].astype(str).str.strip() != '') & (final_df[col].astype(str).str.lower() != 'nan')
+                                valid_data = final_df[valid_mask]
+                                
+                                if not valid_data.empty:
+                                    first_year = valid_data['ファイル年度'].astype(str).min()
+                                    last_year = valid_data['ファイル年度'].astype(str).max()
+                                    
+                                    suffix = ""
+                                    if first_year > min_year and last_year < max_year:
+                                        suffix = f"（{first_year}年度～{last_year}年度）"
+                                    elif first_year > min_year:
+                                        suffix = f"（{first_year}年度～）"
+                                    elif last_year < max_year:
+                                        suffix = f"（～{last_year}年度）"
+                                    
+                                    if suffix:
+                                        new_col_name = f"{col}{suffix}"
+                                        tmp_rename_mapping[col] = new_col_name
+                                        pink_columns.append(new_col_name) 
+                                        
+                            if tmp_rename_mapping:
+                                final_df.rename(columns=tmp_rename_mapping, inplace=True)
+                                log(f"    ! 注意: {len(tmp_rename_mapping)}個の列が「途中追加」または「途中終了」していることを検知しました。")
+
                         final_record_count = len(final_df)
-                        merged_filename = f"{form_folder}_merged_({final_record_count}_records).csv"
+                        # ★拡張子を .csv から .xlsx に変更して保存
+                        merged_filename = f"{form_folder}_merged_({final_record_count}_records).xlsx"
                         save_path = os.path.join(form_path, merged_filename)
-                        final_df.to_csv(save_path, index=False, encoding='utf-8-sig')
+                        
+                        final_df.to_excel(save_path, index=False, engine='openpyxl')
+
+                        # ★ピンク色を塗る対象があれば、開いて色を塗る
+                        if pink_columns:
+                            try:
+                                wb_merged = openpyxl.load_workbook(save_path)
+                                ws_merged = wb_merged.active
+                                pink_fill = PatternFill(patternType='solid', fgColor='FFC0CB')
+                                
+                                for cell in ws_merged[1]:
+                                    if cell.value in pink_columns:
+                                        cell.fill = pink_fill
+                                
+                                wb_merged.save(save_path)
+                            except Exception as e:
+                                log(f"    ! 色の適用中にエラーが発生しました: {e}")
+
                         log(f"  ★ 結合完了: {merged_filename} を生成しました")
 
             with open(os.path.join(base_save_dir, "run_log.txt"), "w", encoding="utf-8") as f:
