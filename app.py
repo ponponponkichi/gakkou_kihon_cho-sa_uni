@@ -280,7 +280,6 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                     merged_data = []
                     default_header_idx = 2 
                     
-                    # ★修正1: os.listdir の結果を sorted() で並び替える（年度順に処理されるようにする）
                     for file in sorted(os.listdir(form_path)):
                         if file.endswith(('.xls', '.xlsx')):
                             file_path = os.path.join(form_path, file)
@@ -315,8 +314,6 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                     if merged_data:
                         final_df = pd.concat(merged_data, ignore_index=True)
 
-                        # ★修正2: すべて合体させた後に、念のため「ファイル年度」で並べ替え（ソート）を確実に行う
-                        # kind='stable' を指定することで、同一年度内での元の行の並び順（大学の並び順など）を崩さずに年度順にソートします
                         final_df = final_df.sort_values(by='ファイル年度', ascending=True, kind='stable', ignore_index=True)
 
                         # --- 学校名と大学名の統合 ---
@@ -377,7 +374,6 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                                 log(f"    ! 注意: {len(tmp_rename_mapping)}個の列が「途中追加」または「途中終了」していることを検知しました。")
 
                         final_record_count = len(final_df)
-                        # ★拡張子を .csv から .xlsx に変更して保存
                         merged_filename = f"{form_folder}_merged_({final_record_count}_records).xlsx"
                         save_path = os.path.join(form_path, merged_filename)
                         
@@ -421,10 +417,14 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
             
             st.success("✅ 全ての処理が完了しました！下のボタンから結果をダウンロードしてください。")
             
+            # ★ ここで日本時間（JST）を指定してタイムスタンプを作成します
+            JST = datetime.timezone(datetime.timedelta(hours=9), 'JST')
+            now_jst_str = datetime.datetime.now(JST).strftime('%Y%m%d_%H%M')
+
             st.download_button(
                 label="📁 整理済みのデータをダウンロード (ZIP)",
                 data=zip_buffer.getvalue(),
-                file_name=f"school_basic_survey_data_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.zip",
+                file_name=f"school_basic_survey_data_{now_jst_str}.zip",
                 mime="application/zip",
                 type="primary"
             )
