@@ -82,7 +82,7 @@ st.title("学校基本調査 一括ダウンロード＆整理ツール")
 st.write("大学改革支援・学位授与機構の「大学基本情報」から、「学校基本調査」指定様式のデータを一括取得し・複数年データを1本化します。")
 
 # --- 追加機能：年度指定 ---
-st.write("#### 対象年度の指定")
+st.write("#### １．対象年度の指定")
 years_list = ["すべて"] + [str(y) for y in range(2012, 2036)]
 col1, col2 = st.columns(2)
 with col1:
@@ -90,7 +90,7 @@ with col1:
 with col2:
     end_year_str = st.selectbox("終了年度", years_list, index=0)
 
-st.write("#### 処理モードの選択")
+st.write("#### ２．処理モードの選択")
 # ラジオボタン
 mode_str = st.radio(
     "整理する範囲を選んでください",
