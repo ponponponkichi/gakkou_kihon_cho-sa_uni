@@ -78,11 +78,11 @@ def get_hidden_header_index(filepath):
     return None
 
 # --- UIの構築 ---
-st.title("📊 学校基本調査 一括ダウンロード＆整理ツール")
+st.title("学校基本調査 一括ダウンロード＆整理ツール")
 st.write("大学改革支援・学位授与機構の「大学基本情報」から、「学校基本調査」指定様式のデータを一括取得し・複数年データを1本化します。")
 
 # --- 追加機能：年度指定 ---
-st.write("#### 📅 対象年度の指定")
+st.write("#### 対象年度の指定")
 years_list = ["すべて"] + [str(y) for y in range(2012, 2036)]
 col1, col2 = st.columns(2)
 with col1:
@@ -90,7 +90,7 @@ with col1:
 with col2:
     end_year_str = st.selectbox("終了年度", years_list, index=0)
 
-st.write("#### 📂 処理モードの選択")
+st.write("#### 処理モードの選択")
 # ラジオボタン
 mode_str = st.radio(
     "整理する範囲を選んでください",
@@ -112,7 +112,7 @@ if current_mode == "select":
 st.divider()
 
 # 実行ボタン
-if st.button("🚀 全自動処理を開始する", type="primary"):
+if st.button("全自動処理を開始する", type="primary"):
     
     if current_mode == "select" and not selected_forms:
         st.error("エラー: 「指定様式のみ1本化する」が選ばれましたが、様式が1つもチェックされていません。")
@@ -415,14 +415,14 @@ if st.button("🚀 全自動処理を開始する", type="primary"):
                         arcname = os.path.relpath(file_path, base_save_dir)
                         zip_file.write(file_path, arcname)
             
-            st.success("✅ 全ての処理が完了しました！下のボタンから結果をダウンロードしてください。")
+            st.success("全ての処理が完了しました！下のボタンから結果をダウンロードしてください。")
             
             # ★ ここで日本時間（JST）を指定してタイムスタンプを作成します
             JST = datetime.timezone(datetime.timedelta(hours=9), 'JST')
             now_jst_str = datetime.datetime.now(JST).strftime('%Y%m%d_%H%M')
 
             st.download_button(
-                label="📁 整理済みのデータをダウンロード (ZIP)",
+                label="整理済みのデータをダウンロード (ZIP)",
                 data=zip_buffer.getvalue(),
                 file_name=f"school_basic_survey_data_{now_jst_str}.zip",
                 mime="application/zip",
